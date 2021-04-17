@@ -1,0 +1,106 @@
+Parameters:
+  AMI:
+    Type: String
+    Description: test AMI
+    Default: ami-0bcf5425cdc1d8a85
+  InstanceType:
+    Type: String
+    Description: put instance type
+    Default: t2.micro
+  KeyName:
+    Type: String
+    Description: put ur ssh key    
+Resources:
+  vpc:
+    Type: AWS::EC2::VPC
+    Properties: 
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      InstanceTenancy: default
+      Tags: 
+        - Key: Name
+          Value: testvpc
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+      - Key: use
+        Value: IGW for vpc
+
+  attachinternetgateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref vpc
+      InternetGatewayId: !Ref InternetGateway
+
+  testroutetable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref vpc
+      Tags:
+      - Key: Name
+        Value: cftest
+
+  mySubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref vpc
+      CidrBlock: 10.0.0.0/24
+      AvailabilityZone: !Select [ 0, !GetAZs ] 
+      Tags:
+      - Key: Name
+        Value: testsubnet
+  myRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGateway
+    Properties:
+       RouteTableId: !Ref testroutetable
+       DestinationCidrBlock: 0.0.0.0/0
+       GatewayId: !Ref InternetGateway
+
+  mySubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref mySubnet
+      RouteTableId: !Ref testroutetable
+
+  MyFirstOSbyCF:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref AMI
+      SubnetId: !Ref mySubnet
+      InstanceType:  !Ref InstanceType
+      SecurityGroupIds: 
+      - Ref: InstanceSecurityGroup
+      AvailabilityZone: ap-south-1a
+      Tags:
+      - Key: Name
+        Value: LWoscf
+
+  InstanceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow http to client host
+      VpcId: !Ref vpc
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 80
+        ToPort: 80
+        CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+      - IpProtocol: -1
+        CidrIp: 0.0.0.0/0
+      Tags:
+      - Key: Name
+        Value: LW_SF_CF
+
+  MyEIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      InstanceId: !Ref MyFirstOSbyCF
+
+Outputs:
+    PublicIp: 
+      Value: !GetAtt MyFirstOSbyCF.PublicIp
